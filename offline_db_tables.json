@@ -1,0 +1,48 @@
+{
+  "jadwal_konsultasi_offline": [
+    {
+      "id": "jo_1",
+      "hari": "Senin",
+      "jam_mulai": "09:00",
+      "jam_selesai": "11:00",
+      "kuota": 5,
+      "psikolog_id": "psikolog_1"
+    },
+    {
+      "id": "jo_2",
+      "hari": "Rabu",
+      "jam_mulai": "13:00",
+      "jam_selesai": "15:00",
+      "kuota": 3,
+      "psikolog_id": "psikolog_1"
+    },
+    {
+      "id": "jo_3",
+      "hari": "Selasa",
+      "jam_mulai": "10:00",
+      "jam_selesai": "12:00",
+      "kuota": 4,
+      "psikolog_id": "psikolog_2"
+    },
+    {
+      "id": "jo_4",
+      "hari": "Kamis",
+      "jam_mulai": "14:00",
+      "jam_selesai": "16:00",
+      "kuota": 5,
+      "psikolog_id": "psikolog_2"
+    },
+    {
+      "id": "jo_5",
+      "hari": "Jumat",
+      "jam_mulai": "12:30",
+      "jam_selesai": "15:00",
+      "kuota": 5,
+      "psikolog_id": "psikolog_1"
+    }
+  ],
+  "antrian_konsultasi": [],
+  "notifikasi_antrian": [],
+  "chat_messages": [],
+  "penilaian_konsultasi": []
+}
