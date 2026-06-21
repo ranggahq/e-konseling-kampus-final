@@ -37,6 +37,18 @@ export async function isMysqlConnected(): Promise<boolean> {
       )
     `);
 
+    // Ensure avatar_url column exists and is of text type if table was already created in earlier runs
+    try {
+      await query(`ALTER TABLE users ALTER COLUMN avatar_url TYPE TEXT`);
+    } catch (migErr: any) {
+      try {
+        // Fallback for different dialects just in case
+        await query(`ALTER TABLE users MODIFY COLUMN avatar_url LONGTEXT`);
+      } catch (e2) {
+        console.log("[PostgreSQL Migration Warning] Gagal alter column avatar_url (abaikan jika sudah sesuai):", migErr.message);
+      }
+    }
+
     // Verify if we need to seed the default users
     const userCountResult: any[] = await query('SELECT COUNT(*) as count FROM users');
     const userCount = parseInt(userCountResult[0]?.count || '0', 10);
