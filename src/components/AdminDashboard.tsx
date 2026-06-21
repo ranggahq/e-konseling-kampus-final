@@ -20,6 +20,7 @@ import {
   createNotificationViaApi,
   getRatingsViaApi
 } from '../data/offlineDb';
+import { compressAndResizeImage } from '../utils/imagecompressor';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -2519,9 +2520,15 @@ export default function AdminDashboard({
                               
                               setAvatarFileError(null);
                               const reader = new FileReader();
-                              reader.onload = (event) => {
+                              reader.onload = async (event) => {
                                 if (event.target?.result) {
-                                  setAvatarPreview(event.target.result as string);
+                                  const rawBase64 = event.target.result as string;
+                                  try {
+                                    const compressed = await compressAndResizeImage(rawBase64);
+                                    setAvatarPreview(compressed);
+                                  } catch (err) {
+                                    setAvatarPreview(rawBase64);
+                                  }
                                 }
                               };
                               reader.readAsDataURL(file);
