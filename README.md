@@ -1,7 +1,7 @@
 # E-Konseling Kampus Final
 **Sistem Informasi Layanan Konseling Mahasiswa Politeknik Negeri Lampung (POLINELA)**
 
-E-Konseling Kampus Final adalah aplikasi berbasis web yang dirancang untuk membantu pengelolaan layanan bimbingan dan konseling mahasiswa di lingkungan Politeknik Negeri Lampung. Aplikasi ini menghubungkan mahasiswa, psikolog/konselor, dan administrator dalam satu platform terintegrasi.
+E-Konseling Kampus Final adalah aplikasi berbasis web yang dirancang untuk membantu pengelolaan layanan bimbingan dan konseling mahasiswa di lingkungan Politeknik Negeri Lampung. Aplikasi ini menghubungkan mahasiswa, psikolog/konselor, dan administrator dalam satu platform terintegrasi dengan penyimpanan database online aman menggunakan Supabase.
 
 ---
 
@@ -35,7 +35,7 @@ Aplikasi ini memiliki 3 level hak akses (role):
 
 *   **Frontend**: React (Vite), TypeScript, Framer Motion (untuk animasi transisi), Tailwind CSS, Lucide React (untuk ikon).
 *   **Backend**: Express.js (Node.js) untuk server API.
-*   **Database**: MySQL dengan driver `mysql2`.
+*   **Database**: Supabase PostgreSQL dengan driver `pg` (Koneksi aman).
 *   **AI SDK**: `@google/genai` (integrasi Gemini).
 
 ---
@@ -73,27 +73,27 @@ Aplikasi ini memiliki 3 level hak akses (role):
 
 ---
 
-## Konfigurasi Database
+## 💡 Penjelasan Masalah Supabase & Solusi Penting
 
-Aplikasi memerlukan database MySQL untuk mengelola autentikasi dan pencatatan bimbingan.
-Ikuti instruksi di bawah ini untuk pemasangan awal database:
+### 1. Kenapa Registrasi Akun Lokal Tidak Masuk ke Supabase?
+Jika saat menjalankan aplikasi di lokal laptop Anda ada pesan error merah:
+`[PostgreSQL] Koneksi atau pembuatan tabel database Supabase gagal...`
+Maka sistem secara cerdas akan menyalakan **Mekanisme Database Lokal (Offline Fallback ke `offline_db_tables.json`)** agar fitur web tetap berjalan normal.
+*   **Efeknya**: Server lokal akan menyimpan pendaftaran & data bimbingan di berkas lokal `offline_db_tables.json` dan **TIDAK** menyinkronkan ke Supabase karena status koneksi ke internet dibatalkan demi keamanan.
+*   **Kondisi di Railway**: Di server Railway Anda, koneksi database online ke Supabase berhasil (`Sukses terhubung ke database Supabase`), sehingga pendaftaran akun baru melalui link Railway **100% langsung masuk ke database Supabase**.
 
-1.  Aktifkan server basis data MySQL melalui **XAMPP** atau **Laragon**.
-2.  Buka aplikasi phpMyAdmin atau DBMS klien Anda, lalu buat database baru dengan nama `e_counseling_polinela`.
-3.  Impor struktur tabel yang berada di dalam berkas **`schema.sql`** ke dalam database baru tersebut.
-
-### Kolom Khusus Penyimpanan Profil & Catatan Konseling:
-Apabila Anda merevisi skema secara manual pada phpMyAdmin, pastikan aturan-aturan tipe data kolom berikut telah disesuaikan:
-*   Kolom `avatar_url` pada tabel `users` bertipe data `LONGTEXT` untuk mengakomodasi string Base64 foto profil hasil upload.
-*   Kolom `catatan_konsultasi`, `hasil_observasi`, dan `rekomendasi` bertipe data `TEXT` pada tabel `antrian_konsultasi` untuk mencatat diagnosis dari psikolog.
-
-*(Sistem ini dilengkapi fungsi modifikasi kolom otomatis yang akan dijalankan oleh backend server saat pertama kali terkoneksi ke database MySQL).*
+### 2. Solusi Error `ENOTFOUND` & Gagal Hubung Supabase di Lokal
+Jika Anda mengalami error `getaddrinfo ENOTFOUND db.wcavpuymycjanitgngbr.supabase.co` di localhost:
+*   **Penyebab**: Provider Internet Anda di Indonesia (terutama **IndiHome / Telkomsel / XL**) seringkali memblokir atau gagal menyelesaikan DNS IPv6 dari server hosting Supabase (`db.xxxxx.supabase.co`).
+*   **Solusi Tercepat**: 
+    1. Gunakan aplikasi **VPN** atau **Cloudflare WARP 1.1.1.1** di komputer Anda saat menjalankan `npm run dev` di lokal.
+    2. Atau gunakan **Pooler Connection String** dari Supabase yang mendukung dual-stack IPv4/IPv6 (bisa dilihat di dasbor Supabase -> *Settings* -> *Database* -> *Connection String* -> pilih jenis *Pooler* / port `5432` atau `6543` dengan host berakhiran `.pooler.supabase.com`).
 
 ---
 
 ## Parameter Berkas Lingkungan (`.env`)
 
-Buat berkas bernama `.env` di direktori root aplikasi, lalu sesuaikan isinya dengan kredensial sistem database Anda:
+Buat berkas bernama `.env` di direktori root aplikasi (di laptop Anda), lalu sesuaikan isinya dengan kredensial sistem koneksi database Supabase Anda:
 
 ```env
 # API Key untuk kecerdasan buatan konsultasi online (Gemini AI)
@@ -102,19 +102,51 @@ GEMINI_API_KEY="ISI_DENGAN_API_KEY_GEMINI_ANDA"
 # Port & URL Akses Utama Aplikasi
 APP_URL="http://localhost:3000"
 
-# Pengaturan Koneksi Database MySQL Instansi
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=""
-DB_NAME=e_counseling_polinela
+# Koneksi Database PostgreSQL Supabase
+# Ambil dari bagian host URI pada menu Settings -> Database di Supabase Anda
+DATABASE_URL="postgresql://postgres:[PASSWORD_SUPABASE_ANDA]@[HOST_SUPABASE_ANDA]:5432/postgres"
+
+# Parameter Individual (Fallback Tambahan)
+DB_HOST="[HOST_SUPABASE_ANDA]"
+DB_PORT=5432
+DB_USER="postgres"
+DB_PASSWORD="[PASSWORD_SUPABASE_ANDA]"
+DB_NAME="postgres"
 ```
 
 ---
 
-## Cara Instalasi dan Menjalankan Aplikasi
+## 🚀 Panduan Alur Update Kode & Deployment (GitHub $\rightarrow$ Railway)
 
-Pastikan Node.js (versi 18+) sudah terpasang pada sistem komputer Anda sebelum memulai langkah berikut:
+Setiap kali Anda merubah atau memperbaiki kode aplikasi di laptop Anda, ikuti langkah-langkah berikut untuk mengirimkannya ke **GitHub** agar **Railway** melakukan update otomatis:
+
+### Langkah 1: Update Kode ke GitHub
+Buka terminal/command prompt di folder proyek Anda di laptop, jalankan perintah berurutan berikut:
+```bash
+# 1. Tandai semua file yang berubah
+git add .
+
+# 2. Buat catatan perubahan (commit)
+git commit -m "update: perbaikan integrasi database online"
+
+# 3. Dorong perubahan ke GitHub Anda
+git push origin main
+```
+
+### Langkah 2: Railway Melakukan Auto-Deploy
+Setelah jalankan `git push`, platfrom **Railway** akan mendeteksi perubahan baru di cabang `main` GitHub Anda secara otomatis:
+1. Railway mengunduh kode terbaru Anda.
+2. Railway menjalankan perintah pembuatan build produksi (`npm run build`).
+3. Railway mematikan container lama dan menyalakan container baru (`npm start`).
+
+### Langkah 3: Mengatasi "502 Bad Gateway" saat Deployment Berlangsung
+*   Jika Anda membuka link Railway dan mendapat halaman **"502 Bad Gateway - Application failed to respond"**:
+    *   **Penyebab**: Proses deploying di Railway membutuhkan waktu sekitar 1 sampai 2 menit untuk melakukan inisialisasi server, menguji koneksi Supabase, dan menjalankan migrasi struktur tabel.
+    *   **Solusi**: Harap tunggu sekitar **1-2 menit**, lalu muat ulang (*Refresh/F5*) browser Anda. Setelah server benar-benar menyala penuh, halaman e-Counseling akan tampil dengan lancar dan siap digunakan!
+
+---
+
+## Cara Instalasi dan Menjalankan Aplikasi secara Lokal
 
 ### 1. Instalasi Dependensi NPM
 Unduh seluruh package dependency yang dibutuhkan aplikasi:
@@ -123,15 +155,13 @@ npm install
 ```
 
 ### 2. Jalankan Aplikasi dalam Mode Pengembangan (Development)
-Gunakan perintah ini untuk memicu kompilasi dev dan menjalankan backend Express serta frontend Vite secara simultan pada port `3000`:
 ```bash
 npm run dev
 ```
-Setelah berjalan, akses alamat berikut lewat peramban internet Anda:
+Setelah berjalan, akses alamat berikut lewat browser Anda:
 **`http://localhost:3000`**
 
-### 3. Kompilasi dan Jalankan Mode Produksi (Production)
-Untuk melakukan kompilasi build yang dioptimalkan untuk lingkungan produksi:
+### 3. Kompilasi dan Jalankan Mode Produksi di Lokal
 ```bash
 # Melakukan build aset statis frontend serta kompilasi file server backend ke folder /dist
 npm run build
@@ -139,17 +169,6 @@ npm run build
 # Menjalankan aplikasi dari hasil build produksi
 npm start
 ```
-
----
-
-## Tangkapan Layar Aplikasi (Screenshots)
-
-*   `[Screenshot 1 - Halaman Login Mahasiswa & Staff]`
-    *(Berisi tampilan autentikasi masuk multi-level pengguna)*
-*   `[Screenshot 2 - Dashboard Pengajuan Jadwal Tatap Muka Mahasiswa]`
-    *(Berisi panel pendaftaran slot bimbingan offline, artikel kesehatan, dan pengisian tes PHQ-9)*
-*   `[Screenshot 3 - Panel Pencatatan Lembar Hasil Sesi oleh Psikolog]`
-    *(Berisi lembar isian catatan konsultasi, hasil observasi, dan daftar rekomendasi pasca-konseling)*
 
 ---
 
