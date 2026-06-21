@@ -12,7 +12,8 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT || 3000);
 
-  app.use(express.json());
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
   // Dynamic Toggle: switch to PostgreSQL/Supabase when configured & running, else fall back gracefully
   let useMysql = false;

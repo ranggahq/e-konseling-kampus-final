@@ -112,6 +112,26 @@ export default function App() {
       .then((serverUsers: User[]) => {
         if (Array.isArray(serverUsers) && serverUsers.length > 0) {
           localStorage.setItem('app_users', JSON.stringify(serverUsers));
+          
+          // Force synchronization of logged-in user session as well
+          const cachedUser = localStorage.getItem('logged_in_user');
+          if (cachedUser) {
+            try {
+              const parsedUser = JSON.parse(cachedUser);
+              const latest = serverUsers.find(u => u.id === parsedUser.id);
+              if (latest) {
+                if (latest.status === 'nonaktif' || latest.status === 'inactive') {
+                  localStorage.removeItem('logged_in_user');
+                  setCurrentUser(null);
+                } else {
+                  setCurrentUser(latest);
+                  localStorage.setItem('logged_in_user', JSON.stringify(latest));
+                }
+              }
+            } catch (e) {
+              console.error("Error keeping user session synced on startup:", e);
+            }
+          }
         }
       })
       .catch(err => {

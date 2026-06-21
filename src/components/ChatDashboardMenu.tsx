@@ -294,8 +294,41 @@ export default function ChatDashboardMenu({
   // Filter consultations that are 'approved' or 'ongoing' (active chats)
   const isStudent = currentUser.role === 'mahasiswa';
 
+  // Fetch general user details (students or psychologists) live from latest app_users
+  const getUserDetails = useCallback((userId: string): User | null => {
+    try {
+      const usersStr = localStorage.getItem('app_users');
+      if (usersStr) {
+        const users = JSON.parse(usersStr) as User[];
+        const found = users.find(u => u.id === userId);
+        if (found) return found;
+      }
+    } catch (e) {
+      console.error('Error getting user details:', e);
+    }
+    return null;
+  }, []);
+
+  const getResolvedStudentAvatar = useCallback((chat: Consultation, studentUser: User | null) => {
+    const liveUser = studentUser || getUserDetails(chat.studentId);
+    return liveUser?.avatarUrl || '';
+  }, [getUserDetails]);
+
+  const getResolvedPsychologistName = useCallback((chat: Consultation, psychUser: User | null) => {
+    const liveUser = psychUser || getUserDetails(chat.psychologistId);
+    if (liveUser?.name) return liveUser.name;
+    if (chat.psychologistName && chat.psychologistName !== 'Psikolog POLINELA') return chat.psychologistName;
+    return 'Psikolog POLINELA';
+  }, [getUserDetails]);
+
+  const getResolvedPsychologistAvatar = useCallback((chat: Consultation, psychUser: User | null) => {
+    const liveUser = psychUser || getUserDetails(chat.psychologistId);
+    return liveUser?.avatarUrl || chat.psychologistAvatar || '';
+  }, [getUserDetails]);
+
   const getResolvedStudentName = useCallback((chat: Consultation, studentUser: User | null) => {
-    if (studentUser?.name) return studentUser.name;
+    const liveUser = studentUser || getUserDetails(chat.studentId);
+    if (liveUser?.name) return liveUser.name;
     if (chat.studentName && chat.studentName !== 'Mahasiswa POLINELA' && chat.studentName !== 'Mahasiswa Tidak Dikenal') {
       return chat.studentName;
     }
@@ -306,7 +339,7 @@ export default function ChatDashboardMenu({
     if (existing?.studentName) return existing.studentName;
     if (chat.studentNim && chat.studentNim !== 'NIM') return `Mahasiswa (${chat.studentNim})`;
     return 'Mahasiswa POLINELA';
-  }, [consultations]);
+  }, [consultations, getUserDetails]);
 
   const rawChatConsultations = consultations.filter(c => {
     const isMatchedRole = isStudent ? c.studentId === currentUser.id : c.psychologistId === currentUser.id;
@@ -701,11 +734,13 @@ export default function ChatDashboardMenu({
           ) : (
             filteredChats.map(chat => {
               const partnerId = isStudent ? chat.psychologistId : chat.studentId;
-              const selectedStudentUser = !isStudent ? getStudentDetails(partnerId) : null;
+              const partnerUser = getUserDetails(partnerId);
               const partnerName = isStudent 
-                ? chat.psychologistName 
-                : getResolvedStudentName(chat, selectedStudentUser);
-              const partnerAvatar = isStudent ? chat.psychologistAvatar : selectedStudentUser?.avatarUrl;
+                ? getResolvedPsychologistName(chat, partnerUser) 
+                : getResolvedStudentName(chat, partnerUser);
+              const partnerAvatar = isStudent 
+                ? getResolvedPsychologistAvatar(chat, partnerUser) 
+                : getResolvedStudentAvatar(chat, partnerUser);
               const isSelected = selectedChat?.id === chat.id;
               const stats = getChatStats(chat.id, partnerId);
               
@@ -807,11 +842,13 @@ export default function ChatDashboardMenu({
 
                 {(() => {
                   const partnerId = isStudent ? selectedChat.psychologistId : selectedChat.studentId;
-                  const selectedStudentUser = !isStudent ? getStudentDetails(partnerId) : null;
+                  const partnerUser = getUserDetails(partnerId);
                   const partnerName = isStudent 
-                    ? selectedChat.psychologistName 
-                    : getResolvedStudentName(selectedChat, selectedStudentUser);
-                  const partnerAvatar = isStudent ? selectedChat.psychologistAvatar : selectedStudentUser?.avatarUrl;
+                    ? getResolvedPsychologistName(selectedChat, partnerUser) 
+                    : getResolvedStudentName(selectedChat, partnerUser);
+                  const partnerAvatar = isStudent 
+                    ? getResolvedPsychologistAvatar(selectedChat, partnerUser) 
+                    : getResolvedStudentAvatar(selectedChat, partnerUser);
                   const psychStatusInfo = isStudent ? getPsychologistDisplayLabel(partnerId) : null;
 
                   return (
@@ -833,10 +870,10 @@ export default function ChatDashboardMenu({
                           ) : (
                             <span className="font-bold text-indigo-600 font-mono">NIM: {selectedChat.studentNim}</span>
                           )}
-                          {!isStudent && selectedStudentUser?.prodiOrUnit && (
+                          {!isStudent && partnerUser?.prodiOrUnit && (
                             <>
                               <span className="text-slate-300">•</span>
-                              <span className="text-slate-500 font-semibold">{selectedStudentUser.prodiOrUnit}</span>
+                              <span className="text-slate-500 font-semibold">{partnerUser.prodiOrUnit}</span>
                             </>
                           )}
                         </div>
