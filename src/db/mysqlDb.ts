@@ -6,85 +6,167 @@ import { ServerNotification } from '../data/serverDb';
  * Checks if the MySQL database configuration is set and the connection works.
  */
 export async function isMysqlConnected(): Promise<boolean> {
-  const host = process.env.DB_HOST;
+  const host = process.env.DB_HOST || process.env.DATABASE_URL;
   if (!host) {
-    console.log("[MySQL Configuration] Menunggu konfigurasi MySQL... Variabel DB_HOST belum diatur di file .env.");
+    console.log("[PostgreSQL Configuration] Menunggu konfigurasi database... Alamat host atau DATABASE_URL belum diatur di file .env.");
     return false;
   }
   try {
-    // Attempt raw query to verify users table exists and connection is successful
+    // Attempt raw query to verify database connection is successful
     await query('SELECT 1');
     
-    // Dynamically upgrade status column in antrian_konsultasi to VARCHAR(100) to support CHECK_IN, SEDANG_BERLANGSUNG, etc.
-    try {
-      await query("ALTER TABLE antrian_konsultasi MODIFY COLUMN status VARCHAR(100) DEFAULT 'Terdaftar'");
-      console.log("[MySQL Upgrade] Success: antrian_konsultasi status column altered to VARCHAR(100)");
-    } catch (e: any) {
-      console.warn("[MySQL Upgrade] Could not alter antrian_konsultasi status column:", e.message);
+    console.log("[PostgreSQL] Sukses terhubung ke database Supabase. Memulai auto-migration...");
+
+    // 1. Create users table
+    await query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id VARCHAR(150) NOT NULL,
+        email VARCHAR(150) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        name VARCHAR(150) NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        nim VARCHAR(50) DEFAULT NULL,
+        prodi VARCHAR(100) DEFAULT NULL,
+        phone VARCHAR(20) DEFAULT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        avatar_url TEXT DEFAULT NULL,
+        gender VARCHAR(50) DEFAULT NULL,
+        semester VARCHAR(50) DEFAULT NULL,
+        bio TEXT DEFAULT NULL,
+        PRIMARY KEY (id)
+      )
+    `);
+
+    // Verify if we need to seed the default users
+    const userCountResult: any[] = await query('SELECT COUNT(*) as count FROM users');
+    const userCount = parseInt(userCountResult[0]?.count || '0', 10);
+    if (userCount === 0) {
+      console.log("[PostgreSQL Seed] Seeding default users to Supabase...");
+      await query(`
+        INSERT INTO users (id, email, password, name, role, nim, prodi, phone, is_active) VALUES
+        ('usr_student_1', 'mahasiswa1@polinela.ac.id', 'password123', 'Budi Santoso', 'mahasiswa', '18051020', 'Manajemen Informatika', '08123456789', TRUE),
+        ('usr_student_2', 'mahasiswa2@polinela.ac.id', 'password123', 'Siti Rahma', 'mahasiswa', '18051021', 'Akuntansi Perpajakan', '08572345678', TRUE),
+        ('psikolog_1', 'sarah.safitri@konseling.ac.id', 'password123', 'Dra. Sarah Safitri, M.Psi.', 'psikolog', NULL, NULL, '081987654321', TRUE),
+        ('psikolog_2', 'rahmat.hidayat@konseling.ac.id', 'password123', 'Rahmat Hidayat, S.Psi., M.Si.', 'psikolog', NULL, NULL, '085222333444', TRUE),
+        ('psikolog_3', 'nisa.amalia@konseling.ac.id', 'password123', 'Nisa Amalia, M.Psi., Psikolog', 'psikolog', NULL, NULL, '081233445566', TRUE),
+        ('admin_1', 'admin.konseling@polinela.ac.id', 'password123', 'Admin e-Counseling POLINELA', 'admin', NULL, NULL, '082111222333', TRUE)
+      `);
     }
 
-    // Dynamically add columns for consultations (clinical notes, observasi, rekomendasi) if they don't exist
-    try {
-      await query("ALTER TABLE antrian_konsultasi ADD COLUMN catatan_konsultasi TEXT NULL");
-      console.log("[MySQL Upgrade] Success: added catatan_konsultasi column.");
-    } catch (e: any) {
-      // column may already exist
+    // 2. Create jadwal_konsultasi_offline table
+    await query(`
+      CREATE TABLE IF NOT EXISTS jadwal_konsultasi_offline (
+        id VARCHAR(150) NOT NULL,
+        hari VARCHAR(50) NOT NULL,
+        jam_mulai VARCHAR(10) NOT NULL,
+        jam_selesai VARCHAR(10) NOT NULL,
+        kuota INT NOT NULL,
+        psikolog_id VARCHAR(150) NOT NULL,
+        PRIMARY KEY (id),
+        FOREIGN KEY (psikolog_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Verify if we need to seed the offline schedule
+    const schCountResult: any[] = await query('SELECT COUNT(*) as count FROM jadwal_konsultasi_offline');
+    const schCount = parseInt(schCountResult[0]?.count || '0', 10);
+    if (schCount === 0) {
+      console.log("[PostgreSQL Seed] Seeding offline schedules...");
+      await query(`
+        INSERT INTO jadwal_konsultasi_offline (id, hari, jam_mulai, jam_selesai, kuota, psikolog_id) VALUES
+        ('sch_1', 'Senin', '09:00', '12:00', 5, 'psikolog_1'),
+        ('sch_2', 'Rabu', '13:00', '15:30', 3, 'psikolog_1'),
+        ('sch_3', 'Kamis', '10:00', '12:00', 4, 'psikolog_2')
+      `);
     }
 
-    try {
-      await query("ALTER TABLE antrian_konsultasi ADD COLUMN hasil_observasi TEXT NULL");
-      console.log("[MySQL Upgrade] Success: added hasil_observasi column.");
-    } catch (e: any) {
-      // column may already exist
+    // 3. Create antrian_konsultasi table
+    await query(`
+      CREATE TABLE IF NOT EXISTS antrian_konsultasi (
+        id VARCHAR(150) NOT NULL,
+        mahasiswa_id VARCHAR(150) NOT NULL,
+        jadwal_id VARCHAR(150) NOT NULL,
+        nomor_antrian VARCHAR(20) NOT NULL,
+        keluhan TEXT NOT NULL,
+        status VARCHAR(100) DEFAULT 'Terdaftar',
+        created_at VARCHAR(50) NOT NULL,
+        mahasiswa_name VARCHAR(150) NOT NULL,
+        mahasiswa_nim VARCHAR(50) NOT NULL,
+        mahasiswa_prodi VARCHAR(100) NOT NULL,
+        mahasiswa_phone VARCHAR(20) NOT NULL,
+        catatan_konsultasi TEXT DEFAULT NULL,
+        hasil_observasi TEXT DEFAULT NULL,
+        rekomendasi TEXT DEFAULT NULL,
+        PRIMARY KEY (id),
+        FOREIGN KEY (mahasiswa_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (jadwal_id) REFERENCES jadwal_konsultasi_offline(id) ON DELETE CASCADE
+      )
+    `);
+
+    // 4. Create notifikasi_antrian table
+    await query(`
+      CREATE TABLE IF NOT EXISTS notifikasi_antrian (
+        id VARCHAR(150) NOT NULL,
+        psikolog_id VARCHAR(150) DEFAULT NULL,
+        user_id VARCHAR(150) NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        text TEXT NOT NULL,
+        created_at VARCHAR(50) NOT NULL,
+        is_read BOOLEAN DEFAULT FALSE,
+        PRIMARY KEY (id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    // 5. Create chat_messages table
+    await query(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id VARCHAR(150) NOT NULL,
+        consultation_id VARCHAR(150) NOT NULL,
+        sender_id VARCHAR(150) NOT NULL,
+        receiver_id VARCHAR(150) NOT NULL,
+        sender_role VARCHAR(50) NOT NULL,
+        message TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at VARCHAR(50) NOT NULL,
+        PRIMARY KEY (id),
+        FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Verify if we need to seed the chat messages
+    const msgCountResult: any[] = await query('SELECT COUNT(*) as count FROM chat_messages');
+    const msgCount = parseInt(msgCountResult[0]?.count || '0', 10);
+    if (msgCount === 0) {
+      console.log("[PostgreSQL Seed] Seeding initial chat message...");
+      await query(`
+        INSERT INTO chat_messages (id, consultation_id, sender_id, receiver_id, sender_role, message, is_read, created_at) VALUES
+        ('msg_1', 'sch_1_demo', 'psikolog_1', 'usr_student_1', 'psikolog', 'Halo Budi, ada yang bisa saya bantu hari ini terkait bimbingan akademik maupun kendala pribadi?', TRUE, '2026-06-20T00:01:00.000Z')
+      `);
     }
 
-    try {
-      await query("ALTER TABLE antrian_konsultasi ADD COLUMN rekomendasi TEXT NULL");
-      console.log("[MySQL Upgrade] Success: added rekomendasi column.");
-    } catch (e: any) {
-      // column may already exist
-    }
+    // 6. Create penilaian_konsultasi table
+    await query(`
+      CREATE TABLE IF NOT EXISTS penilaian_konsultasi (
+        id_penilaian VARCHAR(150) NOT NULL,
+        id_sesi_konsultasi VARCHAR(150) NOT NULL,
+        id_mahasiswa VARCHAR(150) NOT NULL,
+        id_psikolog VARCHAR(150) NOT NULL,
+        rating INT NOT NULL,
+        komentar TEXT,
+        tanggal_penilaian VARCHAR(50) NOT NULL,
+        PRIMARY KEY (id_penilaian),
+        FOREIGN KEY (id_mahasiswa) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (id_psikolog) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
 
-    // Dynamically add columns for user profile customization (avatar_url, gender, semester, bio) if they don't exist
-    try {
-      await query("ALTER TABLE users ADD COLUMN avatar_url LONGTEXT NULL");
-      console.log("[MySQL Upgrade] Success: added users.avatar_url column.");
-    } catch (e: any) {
-      // already exists
-    }
-
-    // Ensure it is LONGTEXT if it was previously created as VARCHAR
-    try {
-      await query("ALTER TABLE users MODIFY COLUMN avatar_url LONGTEXT NULL");
-      console.log("[MySQL Upgrade] Success: modified users.avatar_url to LONGTEXT.");
-    } catch (e: any) {
-      console.warn("[MySQL Upgrade] Could not modify users.avatar_url to LONGTEXT:", e.message);
-    }
-
-    try {
-      await query("ALTER TABLE users ADD COLUMN gender VARCHAR(50) NULL");
-      console.log("[MySQL Upgrade] Success: added users.gender column.");
-    } catch (e: any) {
-      // already exists
-    }
-
-    try {
-      await query("ALTER TABLE users ADD COLUMN semester VARCHAR(50) NULL");
-      console.log("[MySQL Upgrade] Success: added users.semester column.");
-    } catch (e: any) {
-      // already exists
-    }
-
-    try {
-      await query("ALTER TABLE users ADD COLUMN bio TEXT NULL");
-      console.log("[MySQL Upgrade] Success: added users.bio column.");
-    } catch (e: any) {
-      // already exists
-    }
-
+    console.log("[PostgreSQL] Sukses: Auto-migration diselesaikan tanpa ada kendala.");
     return true;
   } catch (error: any) {
-    console.warn('[MySQL] Koneksi atau verifikasi database gagal. Silakan jalankan MySQL di XAMPP/Laragon dan buat database serta tabelnya.', error.message || error);
+    console.warn('[PostgreSQL] Koneksi atau pembuatan tabel database Supabase gagal. Pastikan konfigurasi DATABASE_URL benar.', error.message || error);
     return false;
   }
 }
@@ -641,7 +723,7 @@ export async function getUsers(): Promise<any[]> {
 // 16. CREATE OR UPDATE USER
 export async function createOrUpdateUser(user: any): Promise<any> {
   try {
-    const isActive = user.status === 'nonaktif' || user.status === 'inactive' ? 0 : 1;
+    const isActive = !(user.status === 'nonaktif' || user.status === 'inactive');
     const nimVal = user.nimOrNip || null;
     const prodiVal = user.prodiOrUnit || null;
     const phoneVal = user.phoneNumber || null;

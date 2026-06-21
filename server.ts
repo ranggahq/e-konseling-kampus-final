@@ -10,23 +10,23 @@ import * as mysqlDb from "./src/db/mysqlDb";
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT || 3000);
 
   app.use(express.json());
 
-  // Dynamic Toggle: switch to MySQL when configured & running, else fall back gracefully
+  // Dynamic Toggle: switch to PostgreSQL/Supabase when configured & running, else fall back gracefully
   let useMysql = false;
   mysqlDb.isMysqlConnected()
     .then(connected => {
       useMysql = connected;
       if (connected) {
-        console.log("[MySQL] Connection successfully established to database 'e_counseling_polinela'. Using live MySQL engine.");
+        console.log("[PostgreSQL] Koneksi berhasil terhubung ke database online Supabase. Menggunakan engine PostgreSQL.");
       } else {
-        console.log("[Fallback DB] Local JSON file mechanism active (offline_db_tables.json). No MySQL connection detected.");
+        console.log("[Fallback DB] Mekanisme database lokal aktif (offline_db_tables.json). Belum terhubung ke Supabase.");
       }
     })
     .catch(err => {
-      console.warn("[MySQL] Checking connection failed, using local JSON database fallback.", err);
+      console.warn("[PostgreSQL] Gagal memverifikasi koneksi database, menggunakan fallback JSON lokal.", err);
     });
 
   // ==========================================
