@@ -43,7 +43,6 @@ Aplikasi ini memiliki 3 level hak akses (role):
 ## Struktur Folder Proyek
 
 ```text
-├── schema.sql                # Skema pembuatan tabel database MySQL
 ├── server.ts                 # Entrypoint server Express & integrasi dev server Vite
 ├── package.json              # File manifest dependensi NPM dan script eksekusi
 ├── vite.config.ts            # Konfigurasi bundling aset frontend menggunakan Vite
