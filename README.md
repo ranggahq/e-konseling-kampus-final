@@ -95,12 +95,6 @@ Jika Anda mengalami error `getaddrinfo ENOTFOUND db.wcavpuymycjanitgngbr.supabas
 Buat berkas bernama `.env` di direktori root aplikasi (di laptop Anda), lalu sesuaikan isinya dengan kredensial sistem koneksi database Supabase Anda:
 
 ```env
-# API Key untuk kecerdasan buatan konsultasi online (Gemini AI)
-GEMINI_API_KEY="ISI_DENGAN_API_KEY_GEMINI_ANDA"
-
-# Port & URL Akses Utama Aplikasi
-APP_URL="http://localhost:3000"
-
 # Koneksi Database PostgreSQL Supabase
 # Ambil dari bagian host URI pada menu Settings -> Database di Supabase Anda
 DATABASE_URL="postgresql://postgres:[PASSWORD_SUPABASE_ANDA]@[HOST_SUPABASE_ANDA]:5432/postgres"
